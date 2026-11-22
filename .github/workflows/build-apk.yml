@@ -1,0 +1,50 @@
+
+name: Gerar APK Bongo Cat
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar arquivos
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Preparar projeto
+        run: |
+          mkdir -p source
+          ZIPFILE=$(find . -maxdepth 1 -name '*.zip' | head -n 1)
+          test -n "$ZIPFILE"
+          unzip -q "$ZIPFILE" -d source
+          PROJECT=$(dirname "$(find source -name settings.gradle.kts | head -n 1)")
+          test -f "$PROJECT/app/build.gradle.kts"
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Instalar ferramentas
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip
+
+      - name: Compilar APK
+        run: gradle-8.9/bin/gradle -p "$PROJECT" assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BongoCatMobile-APK
+          path: source/**/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
